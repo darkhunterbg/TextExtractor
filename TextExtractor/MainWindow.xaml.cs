@@ -16,13 +16,23 @@ using Tesseract;
 
 namespace TextExtractor
 {
+    class TextEntry
+    {
+        public Point Position;
+        public string Text;
+    }
+
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
-        string image = System.IO.Path.GetFullPath("img.jpg");
+        string image = System.IO.Path.GetFullPath("t.jpg");
 
+        bool canvasVisible = true;
+
+        List<TextEntry> texts = new List<TextEntry>();
+        Point imageSize;
 
         public MainWindow()
         {
@@ -36,49 +46,76 @@ namespace TextExtractor
             img.Source = logo;
 
             Extract();
+            Render();
+
         }
 
-        private async void Extract()
+        private async void Render()
         {
             await Task.Delay(100);
 
-            TesseractEngine engine = new TesseractEngine(System.IO.Directory.GetCurrentDirectory(), "bul", EngineMode.Default);
+            foreach(var entry in texts)
+            {
+                var label = new TextBox()
+                {
+                    Background = Brushes.LightGray,
+                    BorderThickness = new Thickness(0),
+                    IsReadOnly = true,
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 10,
+                };
+
+
+                double x = (entry.Position.X * (int)img.ActualWidth) / imageSize.X + (int)((canvas.ActualWidth - img.ActualWidth) / 2);
+                double y = (entry.Position.Y * (int)img.ActualHeight) / imageSize.Y;
+
+                Canvas.SetLeft(label, x);
+                Canvas.SetTop(label, y);
+
+                label.Text = entry.Text;
+
+                canvas.Children.Add(label);
+            }
+        }
+
+        private void Extract()
+        {
+
+            PageIteratorLevel mode = PageIteratorLevel.Word;
+
+            TesseractEngine engine = new TesseractEngine(System.IO.Directory.GetCurrentDirectory(), "eng", EngineMode.Default);
             var pixImage = Pix.LoadFromFile(image);
             var page = engine.Process(pixImage);
+            imageSize = new Point(pixImage.Width, pixImage.Height);
 
             var iterator = page.GetIterator();
             iterator.Begin();
 
-            while (iterator.Next(PageIteratorLevel.Word))
+            while (iterator.Next(mode))
             {
-                if (iterator.TryGetBoundingBox(PageIteratorLevel.Word, out Tesseract.Rect bounds))
+                if (iterator.TryGetBoundingBox(mode, out Tesseract.Rect bounds))
                 {
-                    var label = new TextBox()
+                    texts.Add(new TextEntry()
                     {
-                        Background = Brushes.LightGray,
-                        BorderThickness = new Thickness(0),
-                        IsReadOnly = true,
-                        FontWeight = FontWeights.Bold,
-                        FontSize= 14,
-                    };
-
-                    int x = (bounds.X1 * (int)img.ActualWidth) / pixImage.Width + (int)((canvas.ActualWidth - img.ActualWidth) / 2) + 4;
-                    int y = (bounds.Y1 * (int)img.ActualHeight) / pixImage.Height - 4;
-
-                    Canvas.SetLeft(label, x);
-                    Canvas.SetTop(label, y);
-
-                    //label.Width = 100;
-                    //label.Height = 40;
-                    label.Text = iterator.GetText(PageIteratorLevel.Word);
-
-                    canvas.Children.Add(label);
+                        Position = new Point(bounds.X1, bounds.Y1),
+                        Text = iterator.GetText(mode)
+                    });
                 }
-
-                
             }
 
             iterator.Dispose();
         }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            if(e.Key== Key.V)
+            {
+                canvasVisible = !canvasVisible;
+                canvas.Visibility = canvasVisible ? Visibility.Visible : Visibility.Hidden;
+            }
+
+            base.OnKeyUp(e);
+        }
+
     }
 }
