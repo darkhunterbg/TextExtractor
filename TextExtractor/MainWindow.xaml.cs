@@ -13,14 +13,10 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Tesseract;
+using TextExtractor.OCR;
 
 namespace TextExtractor
 {
-    class TextEntry
-    {
-        public Point Position;
-        public string Text;
-    }
 
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -28,11 +24,11 @@ namespace TextExtractor
     public partial class MainWindow : Window
     {
         string image = System.IO.Path.GetFullPath("t.jpg");
+        IOCR engine = new AspriseOCR();
 
         bool canvasVisible = true;
 
-        List<TextEntry> texts = new List<TextEntry>();
-        Point imageSize;
+        IEnumerable<TextEntry> texts;
 
         public MainWindow()
         {
@@ -45,16 +41,16 @@ namespace TextExtractor
 
             img.Source = logo;
 
-            Extract();
             Render();
-
         }
 
         private async void Render()
         {
+            await Extract();
+
             await Task.Delay(100);
 
-            foreach(var entry in texts)
+            foreach (var entry in texts)
             {
                 var label = new TextBox()
                 {
@@ -66,8 +62,8 @@ namespace TextExtractor
                 };
 
 
-                double x = (entry.Position.X * (int)img.ActualWidth) / imageSize.X + (int)((canvas.ActualWidth - img.ActualWidth) / 2);
-                double y = (entry.Position.Y * (int)img.ActualHeight) / imageSize.Y;
+                double x = (entry.Position.X * (int)img.ActualWidth) + (int)((canvas.ActualWidth - img.ActualWidth) / 2);
+                double y = (entry.Position.Y * (int)img.ActualHeight);
 
                 Canvas.SetLeft(label, x);
                 Canvas.SetTop(label, y);
@@ -78,37 +74,19 @@ namespace TextExtractor
             }
         }
 
-        private void Extract()
+        private async Task Extract()
         {
-
-            PageIteratorLevel mode = PageIteratorLevel.Word;
-
-            TesseractEngine engine = new TesseractEngine(System.IO.Directory.GetCurrentDirectory(), "eng", EngineMode.Default);
-            var pixImage = Pix.LoadFromFile(image);
-            var page = engine.Process(pixImage);
-            imageSize = new Point(pixImage.Width, pixImage.Height);
-
-            var iterator = page.GetIterator();
-            iterator.Begin();
-
-            while (iterator.Next(mode))
+            Mouse.OverrideCursor = Cursors.Wait;
+            await Task.Run(() =>
             {
-                if (iterator.TryGetBoundingBox(mode, out Tesseract.Rect bounds))
-                {
-                    texts.Add(new TextEntry()
-                    {
-                        Position = new Point(bounds.X1, bounds.Y1),
-                        Text = iterator.GetText(mode)
-                    });
-                }
-            }
-
-            iterator.Dispose();
+                texts = engine.Extract(image);
+            });
+            Mouse.OverrideCursor = null;
         }
 
         protected override void OnKeyUp(KeyEventArgs e)
         {
-            if(e.Key== Key.V)
+            if (e.Key == Key.V)
             {
                 canvasVisible = !canvasVisible;
                 canvas.Visibility = canvasVisible ? Visibility.Visible : Visibility.Hidden;
